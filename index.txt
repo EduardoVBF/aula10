@@ -1,0 +1,165 @@
+const express = require('express');
+const server = express();
+server.use(express.json());
+
+const cursos = ['Node JS', 'JavaScript', 'PHP', 'React Show', 'VueJS'];
+
+// Middleware Global
+server.use((req, res, next) => {
+     console.log(`URL CHAMADA: ${req.url}`);
+
+     return next();
+});
+
+// (1) Middleware para verificar se o corpo da solicitação existe no PUT 
+const checkRequestBody = (req, res, next) => {
+    if (req.method === 'PUT' && Object.keys(req.body).length === 0) {
+        return res.status(400).json({ error: 'Corpo da solicitação ausente', message: 'Certifique-se de enviar um corpo de solicitação válido.' });
+    }
+    next();
+};
+
+// (2) Middleware para verificar se o corpo da solicitação existe no POST 
+const checkRequestBodyPost = (req, res, next) => {
+    if (req.method === 'POST' && Object.keys(req.body).length === 0) {
+        return res.status(400).json({ error: 'Corpo da solicitação ausente', message: 'Certifique-se de enviar um corpo de solicitação válido.' });
+    }
+    next();
+};
+
+// // (3) Middleware para lidar com mensagem de erro no DELETE
+// const handleDeleteError = (req, res, next) => {
+//     // Verifica se o curso não existe no índice especificado
+//     if (!cursos[req.params.index]) {
+//         return res.status(400).json({ error: "O curso que você quer deletar não existe no ID solicitado" });
+//     }
+//     next();
+// };
+
+// (4) Middleware para logar a lista de cursos atualizada
+const logCursos = (req, res, next) => {
+    // Captura a lista de cursos antes de prosseguir com a inserção
+    const cursosAntigos = [...cursos];
+    // Chama o próximo middleware para prosseguir com a inserção
+    next();
+    // Loga a lista de cursos atualizada após a inserção
+    console.log("Lista de cursos atualizada:", cursosAntigos, "->", cursos);
+};
+
+// (5) Middleware para logar a lista de cursos atualizada após a exclusão
+const logCursoDeletado = (req, res, next) => {
+    // Verifica se o curso existe no índice especificado
+    const index = req.params.index;
+    if (cursos[index]) {
+        // Remove o curso da lista antes de chamar o próximo middleware
+        const cursoDeletado = cursos.splice(index, 1)[0];
+        
+        // Loga a lista de cursos atualizada após a exclusão
+        console.log(`Curso "${cursoDeletado}" deletado. Lista de cursos atualizada:`, cursos);
+        
+        // Inclui a lista de cursos no objeto de resposta
+        res.locals.cursosAtualizados = cursos;
+        
+        // Chama o próximo middleware para prosseguir com a exclusão
+        next();
+    } else {
+        // Se o curso não existir, retorna um erro
+        return res.status(400).json({ error: "O curso que você quer deletar não existe no ID solicitado" });
+    }
+};
+
+// Middleware Local (especifico para tratar do INSERT de novos cursos)
+function checkCurso(req, res, next) {
+    if(!req.body.novo_curso) {
+        return res.status(400).json({error:
+            "Nome do curso é obrigatório neste formato: {'novo_nome': 'Lua'}"});
+    }
+
+    return next();
+}
+
+// Middleware Local (especifico para cursos que não existem)
+function checkIDCurso(req, res, next) {
+    const curso = cursos[req.params.index];
+
+    if(!curso) {
+        return res.status(400).json({ error:"O curso não existe no ID solicitado"});
+    }
+
+    return next();
+}
+
+
+
+// Criando meu SELECT
+server.get('/curso',(req, res)=>{
+    return res.json(cursos);
+});
+
+// Criando meu SELECT passando ID
+server.get('/curso/:index', checkIDCurso, (req, res) => {
+    const { index } = req.params;
+
+    return res.json(cursos[index]);
+});
+
+// // Permitindo INSERIR dados via API
+// server.post('/curso', checkCurso, (req,res)=>{
+//     const { novo_curso } = req.body;
+//     cursos.push(novo_curso);
+
+//     return res.json(cursos);
+// });
+
+
+// Permitindo UPDATE de um curso
+// server.put('/curso/:index', checkIDCurso, (req,res)=>{
+//     const { index } =  req.params;
+//     const { curso } = req.body;
+
+//     cursos[index] = curso;
+
+//     return res.json(cursos);
+// });
+
+// // Permitindo DELETE de um curso
+// server.delete('/curso/:index',(req,res)=>{
+//     const { index } =  req.params;
+    
+//     cursos.splice(index,1);
+
+//     return res.json({message: "Curso deletado com sucesso"});
+// });
+
+// (1) PUT
+server.put('/curso/:index', checkRequestBody, (req,res)=>{
+    const { index } =  req.params;
+    const { curso } = req.body;
+
+    if (curso !== undefined) {
+        cursos[index] = curso;
+    }
+
+    return res.json(cursos);
+});
+
+
+// (2) POST
+server.post('/curso', checkRequestBodyPost, logCursos, (req,res)=>{
+    const { novo_curso } = req.body;
+    cursos.push(novo_curso);
+
+    return res.json(cursos);
+});
+
+
+// (3) DELETE
+server.delete('/curso/:index', logCursoDeletado, (req,res)=>{
+    const { index } =  req.params;
+    
+    cursos.splice(index,1);
+
+    return res.json({ message: "Curso deletado com sucesso", cursos: res.locals.cursosAtualizados });
+});
+
+server.listen(3000);
